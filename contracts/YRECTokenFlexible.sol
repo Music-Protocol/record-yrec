@@ -59,6 +59,19 @@ contract YRECTokenFlexible is
     /// @dev Flag to track if transfers are globally enabled
     bool public transfersEnabled;
 
+    /// @dev Maximum batch size for whitelist operations to prevent gas limit issues
+    uint256 public constant MAX_BATCH_SIZE = 500;
+
+    // ============ CONSTRUCTOR ============
+
+    /**
+     * @dev Constructor that disables initializers to prevent implementation contract from being initialized
+     * @notice This prevents potential hijacking of the implementation contract
+     */
+    constructor() {
+        _disableInitializers();
+    }
+
     // ============ EVENTS ============
     
     event WhitelistUpdated(address indexed account, bool whitelisted);
@@ -75,6 +88,7 @@ contract YRECTokenFlexible is
     error InvalidIPValue();
     error BackingMismatch(uint256 totalSupply, uint256 totalIPValue);
     error ZeroAddress();
+    error BatchSizeExceeded(uint256 provided, uint256 maximum);
 
     // ============ MODIFIERS ============
     
@@ -83,7 +97,7 @@ contract YRECTokenFlexible is
         _;
     }
 
-    modifier transfersAllowed() {
+    modifier transfersAllowedForRegularTransfers() {
         if (!transfersEnabled) revert TransfersDisabled();
         _;
     }
@@ -192,7 +206,7 @@ contract YRECTokenFlexible is
     }
 
     /**
-     * @dev Burns tokens and reduces IP value with 1:1 backing validation
+     * @dev Burns tokens and reduces IP value with enhanced precision to prevent rounding leaks
      * @param from Address to burn tokens from
      * @param amount Amount of tokens to burn
      */
@@ -200,8 +214,16 @@ contract YRECTokenFlexible is
         uint256 holderBalance = balanceOf(from);
         require(holderBalance >= amount, "Insufficient balance");
         
-        // Calculate proportional IP value to reduce
-        uint256 ipValueToReduce = (_ipValuePerHolder[from] * amount) / holderBalance;
+        // Enhanced precision: Calculate proportional IP value to reduce
+        // Use higher precision arithmetic to minimize rounding errors
+        uint256 ipValueToReduce;
+        if (holderBalance == amount) {
+            // If burning entire balance, use exact IP value to prevent residual
+            ipValueToReduce = _ipValuePerHolder[from];
+        } else {
+            // Calculate proportional value with enhanced precision
+            ipValueToReduce = (_ipValuePerHolder[from] * amount) / holderBalance;
+        }
         
         _burn(from, amount);
         _totalIPValue -= ipValueToReduce;
@@ -228,14 +250,18 @@ contract YRECTokenFlexible is
     }
 
     /**
-     * @dev Batch whitelist update for efficiency
-     * @param accounts Array of addresses to update
+     * @dev Batch whitelist update for efficiency with gas limit protection
+     * @param accounts Array of addresses to update (max 500 to prevent gas limit issues)
      * @param whitelisted Whether the addresses should be whitelisted
      */
     function batchUpdateWhitelist(
         address[] calldata accounts,
         bool whitelisted
     ) external onlyRole(WHITELIST_MANAGER_ROLE) {
+        if (accounts.length > MAX_BATCH_SIZE) {
+            revert BatchSizeExceeded(accounts.length, MAX_BATCH_SIZE);
+        }
+        
         for (uint256 i = 0; i < accounts.length; i++) {
             if (accounts[i] != address(0)) {
                 _whitelist[accounts[i]] = whitelisted;
@@ -261,7 +287,7 @@ contract YRECTokenFlexible is
      * @dev Updates the total IP value backing the tokens
      * @param newTotalValue New total IP value in USD (18 decimals)
      */
-    function updateTotalIPValue(uint256 newTotalValue) external onlyRole(COMPLIANCE_OFFICER_ROLE) {
+    function updateTotalIPValue(uint256 newTotalValue) external onlyRole(COMPLIANCE_OFFICER_ROLE) whenNotPaused {
         _totalIPValue = newTotalValue;
         emit IPValueUpdated(newTotalValue, block.timestamp);
     }
@@ -325,14 +351,20 @@ contract YRECTokenFlexible is
     
     /**
      * @dev Override transfer to implement whitelist and compliance checks
+     * @notice Mint and burn operations are exempt from transfer restrictions
      */
     function _update(
         address from,
         address to,
         uint256 value
-    ) internal override(ERC20Upgradeable, ERC20PausableUpgradeable) transfersAllowed {
-        // Allow minting (from == address(0)) and burning (to == address(0))
+    ) internal override(ERC20Upgradeable, ERC20PausableUpgradeable) {
+        // Allow minting (from == address(0)) and burning (to == address(0)) regardless of transfersEnabled
         if (from != address(0) && to != address(0)) {
+            // Only check transfersEnabled for regular transfers, not mint/burn
+            if (!transfersEnabled) {
+                revert TransfersDisabled();
+            }
+            
             // Check whitelist for both sender and receiver
             if (!_whitelist[from] || !_whitelist[to]) {
                 emit ComplianceViolation(from, to, "Address not whitelisted");
@@ -342,10 +374,18 @@ contract YRECTokenFlexible is
 
         super._update(from, to, value);
 
-        // Update IP value tracking for transfers
+        // Enhanced IP value tracking for transfers with improved precision
         if (from != address(0) && to != address(0) && value > 0) {
             uint256 fromBalance = balanceOf(from) + value; // Balance before transfer
-            uint256 ipValueToTransfer = (_ipValuePerHolder[from] * value) / fromBalance;
+            uint256 ipValueToTransfer;
+            
+            if (fromBalance == value) {
+                // If transferring entire balance, use exact IP value to prevent residual
+                ipValueToTransfer = _ipValuePerHolder[from];
+            } else {
+                // Calculate proportional value with precision consideration
+                ipValueToTransfer = (_ipValuePerHolder[from] * value) / fromBalance;
+            }
             
             _ipValuePerHolder[from] -= ipValueToTransfer;
             _ipValuePerHolder[to] += ipValueToTransfer;

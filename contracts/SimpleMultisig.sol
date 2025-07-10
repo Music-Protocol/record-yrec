@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+
 /**
  * @title SimpleMultisig
  * @dev A simple multisig wallet for testing purposes on Plume testnet
@@ -61,6 +63,10 @@ contract SimpleMultisig {
     // ============ CONSTRUCTOR ============
     
     constructor(address[] memory _owners, uint256 _threshold) {
+        // Disable initializers to prevent potential implementation attacks
+        // Even though this is not upgradeable, it's a best practice for defense-in-depth
+        Initializable._disableInitializers();
+        
         require(_owners.length > 0, "Owners required");
         
         for (uint256 i = 0; i < _owners.length; i++) {
