@@ -2,11 +2,13 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title SimpleMultisig
- * @dev A simple multisig wallet for testing purposes on Plume testnet
+ * @dev A simple multisig wallet with replay protection for testing purposes on Plume testnet
  * @notice This is a fallback solution if Gnosis Safe SDK doesn't support Plume network yet
+ * Enhanced with nonce-based replay protection (Q-10 fix)
  */
 contract SimpleMultisig {
     // ============ STATE VARIABLES ============
@@ -19,6 +21,10 @@ contract SimpleMultisig {
     mapping(uint256 => Transaction) public transactions;
     mapping(uint256 => mapping(address => bool)) public confirmations;
     
+    // Q-10 Fix: Add nonce tracking and executed transaction hashes for replay protection
+    uint256 public nonce;
+    mapping(bytes32 => bool) public executedTransactionHashes;
+    
     // ============ STRUCTS ============
     
     struct Transaction {
@@ -27,16 +33,24 @@ contract SimpleMultisig {
         bytes data;
         bool executed;
         uint256 confirmationCount;
+        uint256 nonce; // Q-10 Fix: Add nonce to transaction structure
+        bytes32 txHash; // Q-10 Fix: Add transaction hash for tracking
     }
     
     // ============ EVENTS ============
     
-    event TransactionSubmitted(uint256 indexed transactionId, address indexed to, uint256 value, bytes data);
+    event TransactionSubmitted(uint256 indexed transactionId, address indexed to, uint256 value, bytes data, uint256 nonce);
     event TransactionConfirmed(uint256 indexed transactionId, address indexed owner);
-    event TransactionExecuted(uint256 indexed transactionId);
+    event TransactionExecuted(uint256 indexed transactionId, bytes32 indexed txHash);
     event OwnerAdded(address indexed owner);
     event OwnerRemoved(address indexed owner);
     event ThresholdChanged(uint256 threshold);
+    event NonceIncremented(uint256 newNonce);
+    
+    // ============ ERRORS ============
+    
+    error TransactionAlreadyExecuted(bytes32 txHash);
+    error InvalidNonce(uint256 provided, uint256 expected);
     
     // ============ MODIFIERS ============
     
@@ -57,6 +71,11 @@ contract SimpleMultisig {
     
     modifier notExecuted(uint256 _transactionId) {
         require(!transactions[_transactionId].executed, "Transaction already executed");
+        _;
+    }
+    
+    modifier validNonce(uint256 _nonce) {
+        if (_nonce != nonce) revert InvalidNonce(_nonce, nonce);
         _;
     }
     
@@ -84,19 +103,36 @@ contract SimpleMultisig {
         
         threshold = _threshold;
         emit ThresholdChanged(_threshold);
+        
+        // Q-10 Fix: Initialize nonce for replay protection
+        nonce = 0;
+        emit NonceIncremented(nonce);
     }
     
     // ============ TRANSACTION FUNCTIONS ============
     
     /**
-     * @dev Submit a new transaction proposal
+     * @dev Submit a new transaction proposal with nonce-based replay protection (Q-10 fix)
      * @param to Target contract address
      * @param value ETH value to send
      * @param data Encoded function call data
+     * @param _nonce Transaction nonce for replay protection
      * @return transactionId The ID of the submitted transaction
      */
-    function submitTransaction(address to, uint256 value, bytes memory data) 
-        external onlyOwner returns (uint256 transactionId) {
+    function submitTransaction(
+        address to, 
+        uint256 value, 
+        bytes memory data,
+        uint256 _nonce
+    ) external onlyOwner validNonce(_nonce) returns (uint256 transactionId) {
+        
+        // Q-10 Fix: Generate unique transaction hash including nonce
+        bytes32 txHash = keccak256(abi.encodePacked(to, value, data, _nonce, address(this)));
+        
+        // Q-10 Fix: Check if transaction hash was already executed
+        if (executedTransactionHashes[txHash]) {
+            revert TransactionAlreadyExecuted(txHash);
+        }
         
         transactionId = transactionCount++;
         
@@ -105,10 +141,16 @@ contract SimpleMultisig {
             value: value,
             data: data,
             executed: false,
-            confirmationCount: 0
+            confirmationCount: 0,
+            nonce: _nonce,
+            txHash: txHash
         });
         
-        emit TransactionSubmitted(transactionId, to, value, data);
+        // Q-10 Fix: Increment nonce after successful submission
+        nonce++;
+        emit NonceIncremented(nonce);
+        
+        emit TransactionSubmitted(transactionId, to, value, data, _nonce);
         
         // Automatically confirm the transaction from the submitter
         confirmTransaction(transactionId);
@@ -158,7 +200,7 @@ contract SimpleMultisig {
     }
     
     /**
-     * @dev Execute a confirmed transaction
+     * @dev Execute a confirmed transaction with enhanced replay protection (Q-10 fix)
      * @param transactionId The ID of the transaction to execute
      */
     function executeTransaction(uint256 transactionId) 
@@ -169,12 +211,51 @@ contract SimpleMultisig {
         Transaction storage txn = transactions[transactionId];
         require(txn.confirmationCount >= threshold, "Insufficient confirmations");
         
+        // Q-10 Fix: Mark transaction hash as executed before execution
+        executedTransactionHashes[txn.txHash] = true;
+        
         txn.executed = true;
         
         (bool success, ) = txn.to.call{value: txn.value}(txn.data);
         require(success, "Transaction execution failed");
         
-        emit TransactionExecuted(transactionId);
+        emit TransactionExecuted(transactionId, txn.txHash);
+    }
+    
+    // ============ REPLAY PROTECTION FUNCTIONS (Q-10 Fix) ============
+    
+    /**
+     * @dev Check if a transaction hash has been executed
+     * @param txHash The transaction hash to check
+     * @return Whether the transaction has been executed
+     */
+    function isTransactionExecuted(bytes32 txHash) external view returns (bool) {
+        return executedTransactionHashes[txHash];
+    }
+    
+    /**
+     * @dev Get current nonce for transaction submission
+     * @return Current nonce value
+     */
+    function getCurrentNonce() external view returns (uint256) {
+        return nonce;
+    }
+    
+    /**
+     * @dev Generate transaction hash for verification before submission
+     * @param to Target contract address
+     * @param value ETH value to send
+     * @param data Encoded function call data
+     * @param _nonce Transaction nonce
+     * @return Transaction hash
+     */
+    function generateTransactionHash(
+        address to,
+        uint256 value,
+        bytes memory data,
+        uint256 _nonce
+    ) external view returns (bytes32) {
+        return keccak256(abi.encodePacked(to, value, data, _nonce, address(this)));
     }
     
     // ============ VIEW FUNCTIONS ============
@@ -196,13 +277,15 @@ contract SimpleMultisig {
     }
     
     /**
-     * @dev Get transaction details
+     * @dev Get transaction details with enhanced information (Q-10 fix)
      * @param transactionId The ID of the transaction
      * @return to Target address
      * @return value ETH value
      * @return data Call data
      * @return executed Whether executed
      * @return confirmationCount Number of confirmations
+     * @return txNonce Transaction nonce
+     * @return txHash Transaction hash
      */
     function getTransaction(uint256 transactionId) 
         external 
@@ -213,11 +296,21 @@ contract SimpleMultisig {
             uint256 value,
             bytes memory data,
             bool executed,
-            uint256 confirmationCount
+            uint256 confirmationCount,
+            uint256 txNonce,
+            bytes32 txHash
         ) 
     {
         Transaction storage txn = transactions[transactionId];
-        return (txn.to, txn.value, txn.data, txn.executed, txn.confirmationCount);
+        return (
+            txn.to, 
+            txn.value, 
+            txn.data, 
+            txn.executed, 
+            txn.confirmationCount,
+            txn.nonce,
+            txn.txHash
+        );
     }
     
     /**

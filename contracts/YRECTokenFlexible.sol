@@ -8,9 +8,10 @@ import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
 /**
- * @title Yield‑Generating Real‑World Equity Certificate (YREC)
+ * @title Yield-indexed IP Rights Exposure Certificate (YREC)
  * @dev ERC-3643 compliant security token for intellectual property tokenization
  * @notice This token represents intellectual property value in S&P 500 portfolios with 1:1 USD backing
  * 
@@ -62,6 +63,9 @@ contract YRECTokenFlexible is
     /// @dev Maximum batch size for whitelist operations to prevent gas limit issues
     uint256 public constant MAX_BATCH_SIZE = 500;
 
+    /// @dev Timelock contract address for enhanced upgrade security (Q-09 fix)
+    address public timelock;
+
     // ============ CONSTRUCTOR ============
 
     /**
@@ -79,6 +83,7 @@ contract YRECTokenFlexible is
     event TransfersToggled(bool enabled);
     event ComplianceViolation(address indexed from, address indexed to, string reason);
     event BackingValidated(uint256 totalSupply, uint256 totalIPValue, uint256 timestamp);
+    event TimelockUpdated(address indexed oldTimelock, address indexed newTimelock);
 
     // ============ ERRORS ============
     
@@ -89,6 +94,7 @@ contract YRECTokenFlexible is
     error BackingMismatch(uint256 totalSupply, uint256 totalIPValue);
     error ZeroAddress();
     error BatchSizeExceeded(uint256 provided, uint256 maximum);
+    error UnauthorizedUpgrade(address caller, address expectedTimelock);
 
     // ============ MODIFIERS ============
     
@@ -113,18 +119,20 @@ contract YRECTokenFlexible is
      * @dev Initializes the YREC token contract
      * @param initialOwner Address that will receive DEFAULT_ADMIN_ROLE
      * @param custodianWallet Initial custodian wallet to be whitelisted
+     * @param _timelock Address of the timelock contract for enhanced upgrade security
      */
     function initialize(
         address initialOwner,
-        address custodianWallet
+        address custodianWallet,
+        address _timelock
     ) public initializer {
-        if (initialOwner == address(0) || custodianWallet == address(0)) {
+        if (initialOwner == address(0) || custodianWallet == address(0) || _timelock == address(0)) {
             revert ZeroAddress();
         }
 
-        __ERC20_init("Yield‑Generating Real‑World Equity Certificate", "YREC");
+        __ERC20_init("Yield-indexed IP Rights Exposure Certificate", "YREC");
         __ERC20Pausable_init();
-        __ERC20Permit_init("Yield‑Generating Real‑World Equity Certificate");
+        __ERC20Permit_init("Yield-indexed IP Rights Exposure Certificate");
         __AccessControl_init();
         __UUPSUpgradeable_init();
 
@@ -141,11 +149,15 @@ contract YRECTokenFlexible is
         _whitelist[custodianWallet] = true;
         _whitelist[initialOwner] = true;
         
+        // Set timelock for enhanced upgrade security
+        timelock = _timelock;
+        
         // Transfers disabled by default
         transfersEnabled = false;
 
         emit WhitelistUpdated(custodianWallet, true);
         emit WhitelistUpdated(initialOwner, true);
+        emit TimelockUpdated(address(0), _timelock);
     }
 
     // ============ 1:1 BACKING VALIDATION ============
@@ -214,15 +226,19 @@ contract YRECTokenFlexible is
         uint256 holderBalance = balanceOf(from);
         require(holderBalance >= amount, "Insufficient balance");
         
-        // Enhanced precision: Calculate proportional IP value to reduce
-        // Use higher precision arithmetic to minimize rounding errors
+        // Enhanced precision: Calculate proportional IP value to reduce with mulDiv (Q-07 fix)
         uint256 ipValueToReduce;
         if (holderBalance == amount) {
             // If burning entire balance, use exact IP value to prevent residual
             ipValueToReduce = _ipValuePerHolder[from];
         } else {
-            // Calculate proportional value with enhanced precision
-            ipValueToReduce = (_ipValuePerHolder[from] * amount) / holderBalance;
+            // Use OpenZeppelin's mulDiv for enhanced precision and rounding up to prevent leaks
+            ipValueToReduce = MathUpgradeable.mulDiv(
+                _ipValuePerHolder[from], 
+                amount, 
+                holderBalance, 
+                MathUpgradeable.Rounding.Up
+            );
         }
         
         _burn(from, amount);
@@ -292,6 +308,19 @@ contract YRECTokenFlexible is
         emit IPValueUpdated(newTotalValue, block.timestamp);
     }
 
+    /**
+     * @dev Updates the timelock address for enhanced upgrade security
+     * @param newTimelock New timelock contract address
+     */
+    function updateTimelock(address newTimelock) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newTimelock == address(0)) revert ZeroAddress();
+        
+        address oldTimelock = timelock;
+        timelock = newTimelock;
+        
+        emit TimelockUpdated(oldTimelock, newTimelock);
+    }
+
     // ============ PAUSABLE FUNCTIONS ============
     
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -305,15 +334,25 @@ contract YRECTokenFlexible is
     // ============ UPGRADE FUNCTIONS ============
     
     /**
-     * @dev Authorize upgrade - only governance can upgrade (via timelock)
-     * @notice No moratorium - full flexibility for governance decisions
+     * @dev Authorize upgrade with enhanced defense-in-depth security (Q-09 fix)
+     * @notice Requires both UPGRADER_ROLE and call from designated timelock
      */
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {
-        // No moratorium check - upgrades allowed immediately via governance
+        // Enhanced defense-in-depth: Verify caller is the designated timelock
+        if (msg.sender != timelock) {
+            revert UnauthorizedUpgrade(msg.sender, timelock);
+        }
+        
+        // Additional validation can be added here:
+        // - Upgrade notice period validation
+        // - Implementation contract verification
+        // - Emergency pause checks
+        
         // Security is provided by:
         // 1. UPGRADER_ROLE (only timelock has this)
-        // 2. 6-hour timelock delay (optimized for operations)
-        // 3. Multisig control of timelock
+        // 2. Direct timelock verification (defense-in-depth)
+        // 3. 6-hour timelock delay (optimized for operations)
+        // 4. Multisig control of timelock
     }
 
     // ============ VIEW FUNCTIONS ============
@@ -374,7 +413,7 @@ contract YRECTokenFlexible is
 
         super._update(from, to, value);
 
-        // Enhanced IP value tracking for transfers with improved precision
+        // Enhanced IP value tracking for transfers with mulDiv precision (Q-07 fix)
         if (from != address(0) && to != address(0) && value > 0) {
             uint256 fromBalance = balanceOf(from) + value; // Balance before transfer
             uint256 ipValueToTransfer;
@@ -383,8 +422,13 @@ contract YRECTokenFlexible is
                 // If transferring entire balance, use exact IP value to prevent residual
                 ipValueToTransfer = _ipValuePerHolder[from];
             } else {
-                // Calculate proportional value with precision consideration
-                ipValueToTransfer = (_ipValuePerHolder[from] * value) / fromBalance;
+                // Use OpenZeppelin's mulDiv for enhanced precision
+                ipValueToTransfer = MathUpgradeable.mulDiv(
+                    _ipValuePerHolder[from], 
+                    value, 
+                    fromBalance, 
+                    MathUpgradeable.Rounding.Down
+                );
             }
             
             _ipValuePerHolder[from] -= ipValueToTransfer;
