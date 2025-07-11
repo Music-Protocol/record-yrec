@@ -19,11 +19,11 @@ This project contains the production-ready smart contract for Yield-indexed IP R
 - **Non-transferable**: Only mint/burn operations allowed
 
 ### 🏛️ Governance
-- **6-hour Timelock**: Optimized delay for secure upgrades
-- **UUPS Upgradeable**: Flexible upgrade pattern via timelock governance
-- **Role-based Control**: MINTER_ROLE, BURNER_ROLE, WHITELIST_MANAGER_ROLE
+- **6-hour Timelock**: Required delays for mint/burn operations
+- **UUPS Upgradeable**: Immediate upgrade pattern via role-based control
+- **Role-based Control**: UPGRADER_ROLE, PAUSER_ROLE, WHITELIST_MANAGER_ROLE
 - **Custodial Safe**: All tokens minted to designated safe wallet
-- **Emergency Functions**: Pause/unpause and admin controls
+- **Emergency Functions**: Immediate pause/unpause and admin controls
 
 ### 📋 Compliance & Operations
 - **Whitelist Management**: KYC-controlled addresses with batch operations
@@ -122,30 +122,31 @@ npx hardhat run scripts/test-yrec-simple.ts
 ### YRECTokenSimple.sol (Production Contract)
 ```solidity
 // Main features:
-- Simple ERC20 with mint/burn to whitelisted custodial safe only
-- Role-based access control (MINTER_ROLE, BURNER_ROLE, WHITELIST_MANAGER_ROLE)
+- Simple ERC20 with timelock-controlled mint/burn to whitelisted custodial safe
+- Role-based access control (UPGRADER_ROLE, PAUSER_ROLE, WHITELIST_MANAGER_ROLE)
 - Whitelist management with batch operations (max 500 addresses)
-- Timelock integration for secure upgrades (6-hour delay)
-- UUPS upgradeable pattern
+- Timelock integration for mint/burn operations (6-hour delay)
+- UUPS upgradeable pattern (immediate upgrades via role control)
 - Pausable operations
 - Non-transferable (blocks all transfers except mint/burn)
 - Implementation protection
 ```
 
 ### Security Model
-1. **Timelock Governance** → 6-hour delay for upgrades with defense-in-depth
-2. **Role-based Access** → MINTER_ROLE, BURNER_ROLE, WHITELIST_MANAGER_ROLE control
-3. **Whitelist Control** → KYC compliance with batch operations
-4. **Custodial Safe** → Only whitelisted address that can hold tokens
-5. **No Transfers** → Prevents unauthorized token movement
-6. **Standard Pattern** → OpenZeppelin battle-tested implementation
+1. **Timelock Governance** → 6-hour delay for mint/burn operations
+2. **Immediate Upgrades** → Role-based contract upgrades for operational flexibility
+3. **Role-based Access** → UPGRADER_ROLE, PAUSER_ROLE, WHITELIST_MANAGER_ROLE control
+4. **Whitelist Control** → KYC compliance with batch operations
+5. **Custodial Safe** → Only whitelisted address that can hold tokens
+6. **No Transfers** → Prevents unauthorized token movement
+7. **Standard Pattern** → OpenZeppelin battle-tested implementation
 
 ### Contract Functions
 
 #### Core Functions
-- `mint(uint256 amount)` - Mints tokens to whitelisted custodial safe (MINTER_ROLE)
-- `burn(uint256 amount)` - Burns tokens from whitelisted custodial safe (BURNER_ROLE)
-- `pause()` / `unpause()` - Emergency controls (PAUSER_ROLE)
+- `mint(uint256 amount)` - Mints tokens to custodial safe (TIMELOCK REQUIRED - 6h delay)
+- `burn(uint256 amount)` - Burns tokens from custodial safe (TIMELOCK REQUIRED - 6h delay)
+- `pause()` / `unpause()` - Emergency controls (PAUSER_ROLE - immediate)
 
 #### Whitelist Functions
 - `updateWhitelist(address, bool)` - Add/remove address from whitelist (WHITELIST_MANAGER_ROLE)
@@ -172,11 +173,13 @@ npx hardhat verify --network plume-mainnet <CONTRACT_ADDRESS> <CONSTRUCTOR_ARGS>
 
 ## Usage Flow
 
-1. **Deploy Contract**: Deploy YRECTokenSimple with initial owner and custodial safe
+1. **Deploy Contract**: Deploy YRECTokenSimple with initial owner, custodial safe, and timelock
 2. **Platform Calculations**: Your platform calculates required YREC supply based on IP portfolio
-3. **Generate Transaction**: Platform generates mint/burn transaction JSON
-4. **Execute via Safe**: Upload transaction JSON to Gnosis Safe and execute
-5. **Supply Updated**: On-chain supply now matches platform calculations
+3. **Create Timelock Proposal**: Generate timelock proposal for mint/burn operations
+4. **Submit to Timelock**: Submit proposal to timelock contract via Gnosis Safe
+5. **Wait 6 Hours**: Timelock enforces 6-hour delay for security
+6. **Execute Proposal**: Execute the timelock proposal to mint/burn tokens
+7. **Supply Updated**: On-chain supply now matches platform calculations
 
 ## 🚀 Ready for Production
 
@@ -184,11 +187,12 @@ This governance-enhanced contract is **production-ready** with:
 
 - **Standard Implementation**: Pure OpenZeppelin patterns with minimal modifications
 - **Battle-tested Security**: No custom logic that could introduce vulnerabilities
-- **Timelock Governance**: 6-hour upgrade delays with defense-in-depth security
+- **Timelock Governance**: 6-hour delays for mint/burn operations
+- **Immediate Upgrades**: Role-based contract upgrades for operational flexibility
 - **Whitelist Compliance**: KYC-controlled addresses with batch operations
-- **Simple Operations**: Just mint/burn to whitelisted custodial safe wallet
+- **Simple Operations**: Timelock-controlled mint/burn to whitelisted custodial safe
 - **Clean Architecture**: Minimal attack surface and easy to audit
-- **Operational Efficiency**: Designed for your custodial model with governance
-- **Upgrade Flexibility**: UUPS pattern with timelock protection
+- **Operational Efficiency**: Designed for your custodial model with secure mint/burn delays
+- **Upgrade Flexibility**: UUPS pattern with immediate upgrade capability
 
 **Next Step**: Deploy to Plume mainnet using `deploy-yrec-simple.ts`

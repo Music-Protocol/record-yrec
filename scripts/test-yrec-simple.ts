@@ -88,45 +88,42 @@ async function main() {
     console.log("❌ Batch whitelist failed:", error.reason || "Access denied");
   }
   
-  // Test minting (should only work if custodial safe is whitelisted)
-  console.log("\n🪙 Testing Mint Function:");
+  // Test direct minting (should fail - requires timelock)
+  console.log("\n🪙 Testing Direct Mint Function (Should Fail):");
   const mintAmount = ethers.parseEther("1000"); // 1000 YREC
   
   try {
-    console.log("Minting", ethers.formatEther(mintAmount), "YREC to custodial safe...");
+    console.log("Attempting direct mint of", ethers.formatEther(mintAmount), "YREC...");
     const mintTx = await yrecToken.mint(mintAmount);
     await mintTx.wait();
-    console.log("✅ Mint successful! Tx:", mintTx.hash);
-    
-    // Check balance after mint
-    const balanceAfterMint = await yrecToken.balanceOf(custodialSafe);
-    const totalSupplyAfterMint = await yrecToken.totalSupply();
-    console.log("Custodial Safe Balance:", ethers.formatEther(balanceAfterMint), "YREC");
-    console.log("Total Supply:", ethers.formatEther(totalSupplyAfterMint), "YREC");
+    console.log("❌ Direct mint should have failed but didn't!");
     
   } catch (error: any) {
-    console.log("❌ Mint failed:", error.reason || "Access denied or whitelist issue");
+    console.log("✅ Direct mint correctly blocked:", error.reason || "Timelock required");
   }
   
-  // Test burning (should only work if custodial safe is whitelisted)
-  console.log("\n🔥 Testing Burn Function:");
+  // Test direct burning (should fail - requires timelock)
+  console.log("\n🔥 Testing Direct Burn Function (Should Fail):");
   const burnAmount = ethers.parseEther("500"); // 500 YREC
   
   try {
-    console.log("Burning", ethers.formatEther(burnAmount), "YREC from custodial safe...");
+    console.log("Attempting direct burn of", ethers.formatEther(burnAmount), "YREC...");
     const burnTx = await yrecToken.burn(burnAmount);
     await burnTx.wait();
-    console.log("✅ Burn successful! Tx:", burnTx.hash);
-    
-    // Check balance after burn
-    const balanceAfterBurn = await yrecToken.balanceOf(custodialSafe);
-    const totalSupplyAfterBurn = await yrecToken.totalSupply();
-    console.log("Custodial Safe Balance:", ethers.formatEther(balanceAfterBurn), "YREC");
-    console.log("Total Supply:", ethers.formatEther(totalSupplyAfterBurn), "YREC");
+    console.log("❌ Direct burn should have failed but didn't!");
     
   } catch (error: any) {
-    console.log("❌ Burn failed:", error.reason || "Insufficient balance or whitelist issue");
+    console.log("✅ Direct burn correctly blocked:", error.reason || "Timelock required");
   }
+  
+  // Show how mint/burn would work through timelock
+  console.log("\n⏰ Timelock Operations Info:");
+  console.log("To mint/burn tokens, you need to:");
+  console.log("1. Create timelock proposal with target:", await yrecToken.getAddress());
+  console.log("2. Call data: mint(1000000000000000000000) or burn(500000000000000000000)");
+  console.log("3. Wait 6 hours for timelock delay");
+  console.log("4. Execute the proposal");
+  console.log("5. Tokens will be minted/burned to/from custodial safe");
   
   // Test transfer attempt (should fail)
   console.log("\n🚫 Testing Transfer Restriction:");
@@ -141,13 +138,13 @@ async function main() {
   console.log("\n🏛️ Testing Governance:");
   console.log("Timelock Address:", await yrecToken.timelock());
   
-  // Check if deployer can upgrade (should fail without timelock)
+  // Check upgrade capabilities (should be immediate with role)
   try {
     const hasUpgraderRole = await yrecToken.hasRole(await yrecToken.UPGRADER_ROLE(), deployer.address);
     console.log("Deployer has UPGRADER_ROLE:", hasUpgraderRole);
     
     if (hasUpgraderRole) {
-      console.log("⚠️  Note: Upgrades require call from timelock contract, not direct calls");
+      console.log("✅ Contract upgrades are immediate (role-based, no timelock delay)");
     }
   } catch (error: any) {
     console.log("Upgrade role check failed:", error.reason);
@@ -157,9 +154,10 @@ async function main() {
   console.log("\n📋 Summary:");
   console.log("✅ Contract deployed with governance features");
   console.log("✅ Whitelist management working");
-  console.log("✅ Mint/burn restricted to whitelisted custodial safe");
+  console.log("✅ Mint/burn require 6-hour timelock delays");
+  console.log("✅ Contract upgrades are immediate (role-based)");
   console.log("✅ Transfers blocked (non-transferable)");
-  console.log("✅ Timelock governance integrated");
+  console.log("✅ Timelock governance for mint/burn operations");
   console.log("✅ Role-based access control active");
 }
 

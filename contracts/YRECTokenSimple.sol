@@ -32,8 +32,6 @@ contract YRECTokenSimple is
     UUPSUpgradeable
 {
     // ============ ROLES ============
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant WHITELIST_MANAGER_ROLE = keccak256("WHITELIST_MANAGER_ROLE");
@@ -78,6 +76,7 @@ contract YRECTokenSimple is
     error ZeroAddress();
     error BatchSizeExceeded(uint256 provided, uint256 maximum);
     error UnauthorizedUpgrade(address caller, address expectedTimelock);
+    error UnauthorizedMintBurn(address caller, address expectedTimelock);
 
     // ============ MODIFIERS ============
     
@@ -111,8 +110,6 @@ contract YRECTokenSimple is
 
         // Set up roles - all to initialOwner for simplicity
         _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
-        _grantRole(MINTER_ROLE, initialOwner);
-        _grantRole(BURNER_ROLE, initialOwner);
         _grantRole(PAUSER_ROLE, initialOwner);
         _grantRole(UPGRADER_ROLE, initialOwner);
         _grantRole(WHITELIST_MANAGER_ROLE, initialOwner);
@@ -133,18 +130,30 @@ contract YRECTokenSimple is
     // ============ MINTING & BURNING ============
     
     /**
-     * @dev Mints tokens to the custodial safe wallet
+     * @dev Mints tokens to the custodial safe wallet (TIMELOCK REQUIRED)
      * @param amount Amount of tokens to mint
+     * @notice This function requires a 6-hour timelock delay for security
      */
-    function mint(uint256 amount) external onlyRole(MINTER_ROLE) onlyWhitelisted(custodialSafe) whenNotPaused {
+    function mint(uint256 amount) external onlyWhitelisted(custodialSafe) whenNotPaused {
+        // Enhanced security: Verify caller is the designated timelock
+        if (msg.sender != timelock) {
+            revert UnauthorizedMintBurn(msg.sender, timelock);
+        }
+        
         _mint(custodialSafe, amount);
     }
 
     /**
-     * @dev Burns tokens from the custodial safe wallet
+     * @dev Burns tokens from the custodial safe wallet (TIMELOCK REQUIRED)
      * @param amount Amount of tokens to burn
+     * @notice This function requires a 6-hour timelock delay for security
      */
-    function burn(uint256 amount) external onlyRole(BURNER_ROLE) onlyWhitelisted(custodialSafe) whenNotPaused {
+    function burn(uint256 amount) external onlyWhitelisted(custodialSafe) whenNotPaused {
+        // Enhanced security: Verify caller is the designated timelock
+        if (msg.sender != timelock) {
+            revert UnauthorizedMintBurn(msg.sender, timelock);
+        }
+        
         _burn(custodialSafe, amount);
     }
 
@@ -206,7 +215,7 @@ contract YRECTokenSimple is
     }
 
     /**
-     * @dev Updates the timelock address for enhanced upgrade security
+     * @dev Updates the timelock address for enhanced mint/burn security
      * @param newTimelock New timelock contract address
      */
     function updateTimelock(address newTimelock) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -229,20 +238,13 @@ contract YRECTokenSimple is
     // ============ UPGRADE FUNCTIONS ============
     
     /**
-     * @dev Authorize upgrade with timelock verification for enhanced security
-     * @notice Requires both UPGRADER_ROLE and call from designated timelock
+     * @dev Standard upgrade authorization - immediate upgrades with role control only
+     * @notice Contract upgrades are immediate (no timelock delay) for operational flexibility
      */
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {
-        // Enhanced security: Verify caller is the designated timelock
-        if (msg.sender != timelock) {
-            revert UnauthorizedUpgrade(msg.sender, timelock);
-        }
-        
-        // Security is provided by:
-        // 1. UPGRADER_ROLE (only timelock has this)
-        // 2. Direct timelock verification (defense-in-depth)
-        // 3. 6-hour timelock delay (optimized for operations)
-        // 4. Multisig control of timelock
+        // Standard OpenZeppelin upgrade pattern - immediate upgrades
+        // Only UPGRADER_ROLE required, no timelock delays for upgrades
+        // This allows for quick fixes and updates when needed
     }
 
     // ============ VIEW FUNCTIONS ============

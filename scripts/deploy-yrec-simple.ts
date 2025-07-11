@@ -96,18 +96,18 @@ async function main() {
   
   // Check roles
   const DEFAULT_ADMIN_ROLE = await yrecToken.DEFAULT_ADMIN_ROLE();
-  const MINTER_ROLE = await yrecToken.MINTER_ROLE();
-  const BURNER_ROLE = await yrecToken.BURNER_ROLE();
+  const UPGRADER_ROLE = await yrecToken.UPGRADER_ROLE();
+  const PAUSER_ROLE = await yrecToken.PAUSER_ROLE();
   const WHITELIST_MANAGER_ROLE = await yrecToken.WHITELIST_MANAGER_ROLE();
   
   const hasAdminRole = await yrecToken.hasRole(DEFAULT_ADMIN_ROLE, INITIAL_OWNER);
-  const hasMinterRole = await yrecToken.hasRole(MINTER_ROLE, INITIAL_OWNER);
-  const hasBurnerRole = await yrecToken.hasRole(BURNER_ROLE, INITIAL_OWNER);
+  const hasUpgraderRole = await yrecToken.hasRole(UPGRADER_ROLE, INITIAL_OWNER);
+  const hasPauserRole = await yrecToken.hasRole(PAUSER_ROLE, INITIAL_OWNER);
   const hasWhitelistRole = await yrecToken.hasRole(WHITELIST_MANAGER_ROLE, INITIAL_OWNER);
   
   console.log("Has Admin Role:", hasAdminRole);
-  console.log("Has Minter Role:", hasMinterRole);
-  console.log("Has Burner Role:", hasBurnerRole);
+  console.log("Has Upgrader Role:", hasUpgraderRole);
+  console.log("Has Pauser Role:", hasPauserRole);
   console.log("Has Whitelist Manager Role:", hasWhitelistRole);
   
   // Check whitelist status
@@ -125,13 +125,14 @@ async function main() {
   
   console.log("\nNext steps:");
   console.log("1. Verify contracts on block explorer");
-  console.log("2. Grant UPGRADER_ROLE to timelock contract");
-  console.log("3. Update main application .env with new addresses");
-  console.log("4. Test minting/burning functionality");
-  console.log("5. Set up additional whitelist addresses as needed");
+  console.log("2. Update main application .env with new addresses");
+  console.log("3. Set up additional whitelist addresses as needed");
+  console.log("4. Create timelock proposals for mint/burn operations");
+  console.log("5. Test timelock governance flow");
   
   console.log("\n🔐 Security Features:");
-  console.log("✅ Timelock governance with 6-hour delay");
+  console.log("✅ Timelock governance for mint/burn (6-hour delay)");
+  console.log("✅ Immediate contract upgrades (role-based)");
   console.log("✅ Whitelist management for compliance");
   console.log("✅ Role-based access control");
   console.log("✅ Non-transferable (mint/burn only)");
