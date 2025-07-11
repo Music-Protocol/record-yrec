@@ -1,35 +1,34 @@
 # YREC Token Project
 
-**Production-Ready** YREC token with timelock, multisig, and flexible governance functionality.
+**Production-Ready** Yield-indexed IP Rights Exposure Certificate (YREC) token with simple mint/burn functionality for custodial operations.
 
 ## Overview
 
-This project contains the production-ready smart contracts for YREC token:
-- **YRECTokenFlexible.sol**: Main ERC-3643 compliant security token ✅ **Production Ready**
+This project contains the production-ready smart contract for Yield-indexed IP Rights Exposure Certificate (YREC) token:
+- **YRECTokenSimple.sol**: Main ERC20 token with simple mint/burn functionality ✅ **Production Ready**
 - **YRECTimelock.sol**: Governance timelock contract (6-hour delay) ✅ **Production Ready**  
 - **SimpleMultisig.sol**: Basic multisig wallet for testnet fallback ✅ **Production Ready**
-- **Lock.sol**: Sample contract (development reference only)
 
 ## Key Features
 
 ### 🛡️ Security
-- **1:1 USD Backing Validation**: Enforced at contract level with `BackingMismatch` errors
+- **Standard OpenZeppelin Implementation**: Battle-tested ERC20 with minimal modifications
 - **Role-based Access Control**: Granular permissions with OpenZeppelin AccessControl
 - **Implementation Protection**: `_disableInitializers()` prevents hijacking
-- **Gas Limit Protection**: Batch operations limited to 500 addresses
 - **Pausable Operations**: Emergency pause functionality
+- **Non-transferable**: Only mint/burn operations allowed
 
 ### 🏛️ Governance
-- **6-hour Timelock**: Optimized delay for operational efficiency
-- **Gnosis Safe Integration**: Multi-signature control of governance
-- **No Upgrade Moratorium**: Full flexibility via timelock governance
-- **Emergency Functions**: Token recovery and system management
+- **UUPS Upgradeable**: Flexible upgrade pattern via governance
+- **Role-based Control**: MINTER_ROLE and BURNER_ROLE for operations
+- **Custodial Safe**: All tokens minted to designated safe wallet
+- **Emergency Functions**: Pause/unpause and admin controls
 
-### 📋 Compliance
-- **ERC-3643 Standard**: Security token compliance
-- **Whitelist Management**: KYC-controlled transfers
-- **Transfer Controls**: Global enable/disable functionality
-- **Audit Trail**: Comprehensive event logging
+### 📋 Simple Operations
+- **Mint Only to Safe**: Tokens can only be minted to the custodial safe wallet
+- **Burn Only from Safe**: Tokens can only be burned from the custodial safe wallet
+- **No Transfers**: Regular transfers between addresses are blocked
+- **Clean Interface**: Simple mint(amount) and burn(amount) functions
 
 ## Installation
 
@@ -58,184 +57,122 @@ Create a `.env` file with the following variables:
 PRIVATE_KEY=your_private_key_here
 PLUME_RPC_URL=https://plume-rpc.url
 PLUME_EXPLORER_API_KEY=your_explorer_api_key
+CUSTODIAL_SAFE=0x_your_safe_wallet_address
+INITIAL_OWNER=0x_your_owner_address
 ```
 
 ## Testing
 
-### Run All Tests
+### Run Basic Tests
 ```bash
-npm test
+# Test simple functionality
+npx hardhat run scripts/test-yrec-simple.ts --network plume-testnet
 ```
 
-### Run Tests with Gas Reporting
+### Compile Contracts
 ```bash
-REPORT_GAS=true npm test
-```
-
-### Run Specific Test Files
-```bash
-# Test token functionality
-npx hardhat test test/test-functionality.ts
-
-# Test full system
-npx hardhat test test/test-full-system.ts
-```
-
-### Test Coverage
-```bash
-npx hardhat coverage
+npx hardhat compile
 ```
 
 ## Deployment
 
 ### Deploy to Plume Testnet
 ```bash
-# Deploy YREC token with all fixes
-npx hardhat run scripts/deploy-yrec-flexible.ts --network plume-testnet
+# Deploy simple YREC token
+npx hardhat run scripts/deploy-yrec-simple.ts --network plume-testnet
 ```
 
 ### Deploy to Plume Mainnet (Production Ready)
 ```bash
 # Deploy YREC token to mainnet
-npx hardhat run scripts/deploy-yrec-flexible.ts --network plume-mainnet
+npx hardhat run scripts/deploy-yrec-simple.ts --network plume-mainnet
 ```
 
 ## Production Deployment Checklist
 
 ### Pre-Deployment ✅
-- [x] Comprehensive testing completed
-- [x] Gas optimization verified
-- [x] Security review completed
-- [x] Code cleanup completed
+- [x] Standard OpenZeppelin implementation
+- [x] Simple mint/burn functionality verified
+- [x] Custodial safe configuration confirmed
+- [x] Non-transferable functionality tested
 
 ### Post-Deployment Tasks
 - [ ] Verify contracts on Plume explorer
-- [ ] Configure Gnosis Safe with timelock
-- [ ] Set up initial whitelist
-- [ ] Test governance flow (mint/burn operations)
-- [ ] Configure DeFiLlama integration
-- [ ] Enable transfers when ready for trading
+- [ ] Test mint function with custodial safe
+- [ ] Test burn function with custodial safe
+- [ ] Confirm transfer restrictions work
+- [ ] Update main application with contract address
 
 ## Scripts
 
-### System Management
-```bash
-# Complete system reset
-npx hardhat run scripts/complete-system-reset.ts
-
-# Emergency system check
-npx hardhat run scripts/emergency-check-system.ts
-
-# Reset for testing
-npx hardhat run scripts/reset-system-for-testing.ts
-```
-
 ### Token Operations
 ```bash
-# Mint tokens to safe
-npx hardhat run scripts/mint-to-safe.ts
+# Deploy simple contract
+npx hardhat run scripts/deploy-yrec-simple.ts
 
-# Test burn function
-npx hardhat run scripts/test-burn-function.ts
-
-# Execute burn reconciliation
-npx hardhat run scripts/execute-burn-reconciliation.ts
-```
-
-### Safe Setup
-```bash
-# Setup Gnosis Safe
-npx hardhat run scripts/setup-gnosis-safe.ts
-
-# Transfer to multisig
-npx hardhat run scripts/transfer-to-multisig.ts
+# Test functionality
+npx hardhat run scripts/test-yrec-simple.ts
 ```
 
 ## Contract Architecture
 
-### YRECTokenFlexible.sol (Production Contract)
+### YRECTokenSimple.sol (Production Contract)
 ```solidity
 // Main features:
-- 1:1 USD backing with IP value tracking
-- Role-based access control
-- Whitelist management (batch size limited)
-- Pausable operations
+- Simple ERC20 with mint/burn to custodial safe only
+- Role-based access control (MINTER_ROLE, BURNER_ROLE)
 - UUPS upgradeable pattern
-- ERC-3643 compliance
+- Pausable operations
+- Non-transferable (blocks all transfers except mint/burn)
 - Implementation protection
 ```
 
 ### Security Model
-1. **Gnosis Safe** → Controls timelock operations
-2. **6-hour Timelock** → Governance delay for upgrades
-3. **Role-based Access** → Granular permissions
-4. **Whitelist Control** → KYC compliance
-5. **1:1 Backing Validation** → Built-in treasury protection
+1. **Role-based Access** → MINTER_ROLE and BURNER_ROLE control
+2. **Custodial Safe** → Only address that can hold tokens
+3. **No Transfers** → Prevents unauthorized token movement
+4. **Standard Pattern** → OpenZeppelin battle-tested implementation
 
-### **Emergency Response Procedures**
+### Contract Functions
 
-#### **Immediate Response (0-1 hour)**
-1. **Pause Contract**: Use PAUSER_ROLE if vulnerability detected
-2. **Assess Impact**: Determine scope of potential exploit
-3. **Secure Keys**: Verify Gnosis Safe integrity
+#### Core Functions
+- `mint(uint256 amount)` - Mints tokens to custodial safe (MINTER_ROLE)
+- `burn(uint256 amount)` - Burns tokens from custodial safe (BURNER_ROLE)
+- `pause()` / `unpause()` - Emergency controls (PAUSER_ROLE)
 
-#### **Short-term Response (1-24 hours)**
-1. **Coordinate Team**: Activate incident response team
-2. **Prepare Fix**: Develop contract upgrade if needed
-3. **Community Communication**: Transparent status updates
+#### View Functions
+- `custodialSafe()` - Returns the custodial safe address
+- `totalSupply()` - Returns total token supply
+- `balanceOf(address)` - Returns balance (only custodial safe will have balance)
 
-#### **Long-term Response (24+ hours)**
-1. **Deploy Fix**: Execute governance upgrade via timelock
-2. **Audit Changes**: External review of emergency fixes
-3. **Post-mortem**: Document lessons learned
-
-### **Monitoring & Detection**
-
-#### **On-chain Monitoring**
-- ✅ `BackingValidated` events for 1:1 peg monitoring
-- ✅ Role change events for governance tracking
-- ✅ Large transaction alerts for unusual activity
-
-#### **Off-chain Monitoring**
-- 📋 Multi-signature transaction monitoring
-- 📋 IP valuation accuracy checks
-- 📋 Regulatory compliance monitoring
-
-### **Regular Security Practices**
-
-#### **Ongoing Security**
-- 🔄 Quarterly security reviews
-- 🔄 Dependency updates and vulnerability scans
-- 🔄 Key rotation procedures
-- 🔄 Emergency drill exercises
-
-#### **Audit Trail**
-- ✅ All governance actions logged on-chain
-- ✅ Multi-signature transaction history preserved
-- ✅ IP valuation update history maintained
-
-This threat model addresses the security considerations for the YREC token system and provides clear mitigation strategies for identified risks.
+#### Admin Functions
+- `updateCustodialSafe(address)` - Updates custodial safe address (DEFAULT_ADMIN_ROLE)
 
 ## Contract Verification
 
 ### Verify on Plume Explorer
+After deployment, verify the contract:
 ```bash
-# Verify YREC token
-npx hardhat run scripts/verify.ts --network plume-mainnet
+npx hardhat verify --network plume-mainnet <CONTRACT_ADDRESS> <CONSTRUCTOR_ARGS>
 ```
+
+## Usage Flow
+
+1. **Deploy Contract**: Deploy YRECTokenSimple with initial owner and custodial safe
+2. **Platform Calculations**: Your platform calculates required YREC supply based on IP portfolio
+3. **Generate Transaction**: Platform generates mint/burn transaction JSON
+4. **Execute via Safe**: Upload transaction JSON to Gnosis Safe and execute
+5. **Supply Updated**: On-chain supply now matches platform calculations
 
 ## 🚀 Ready for Production
 
-This codebase has been thoroughly audited and **ALL critical and medium priority security issues have been resolved**. The contracts are ready for mainnet deployment to Plume network with:
+This simplified contract is **production-ready** with:
 
-- **Robust Security**: All audit findings Q-01 through Q-12 addressed
-- **Implementation Protection**: `_disableInitializers()` in all contracts
-- **Gas Optimization**: Batch size limits prevent DoS attacks
-- **Enhanced Precision**: Improved rounding logic prevents IP value leaks
-- **Comprehensive Documentation**: Full threat model and security analysis
-- **Operational Efficiency**: Optimized for weekly reconciliation operations  
-- **Regulatory Compliance**: ERC-3643 standard implementation
-- **Governance Ready**: Timelock + multisig architecture
-- **1:1 USD Backing**: Mathematically enforced at contract level
+- **Standard Implementation**: Pure OpenZeppelin patterns with minimal modifications
+- **Battle-tested Security**: No custom logic that could introduce vulnerabilities
+- **Simple Operations**: Just mint/burn to your custodial safe wallet
+- **Clean Architecture**: Minimal attack surface and easy to audit
+- **Operational Efficiency**: Designed for your custodial model
+- **Upgrade Flexibility**: UUPS pattern allows future improvements
 
-**Next Step**: Deploy to Plume mainnet using `deploy-yrec-flexible.ts`
+**Next Step**: Deploy to Plume mainnet using `deploy-yrec-simple.ts`
