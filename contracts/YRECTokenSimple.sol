@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
@@ -77,11 +77,18 @@ contract YRECTokenSimple is
     error BatchSizeExceeded(uint256 provided, uint256 maximum);
     error UnauthorizedUpgrade(address caller, address expectedTimelock);
     error UnauthorizedMintBurn(address caller, address expectedTimelock);
+    error TimelockUpdateNotAllowed();
+    error CustodialSafeUpdateNotAllowed();
 
     // ============ MODIFIERS ============
     
     modifier onlyWhitelisted(address account) {
         if (!_whitelist[account]) revert NotWhitelisted(account);
+        _;
+    }
+
+    modifier onlyTimelock() {
+        if (msg.sender != timelock) revert UnauthorizedMintBurn(msg.sender, timelock);
         _;
     }
 
@@ -134,12 +141,7 @@ contract YRECTokenSimple is
      * @param amount Amount of tokens to mint
      * @notice This function requires a 6-hour timelock delay for security
      */
-    function mint(uint256 amount) external onlyWhitelisted(custodialSafe) whenNotPaused {
-        // Enhanced security: Verify caller is the designated timelock
-        if (msg.sender != timelock) {
-            revert UnauthorizedMintBurn(msg.sender, timelock);
-        }
-        
+    function mint(uint256 amount) external onlyWhitelisted(custodialSafe) onlyTimelock whenNotPaused {
         _mint(custodialSafe, amount);
     }
 
@@ -148,12 +150,7 @@ contract YRECTokenSimple is
      * @param amount Amount of tokens to burn
      * @notice This function requires a 6-hour timelock delay for security
      */
-    function burn(uint256 amount) external onlyWhitelisted(custodialSafe) whenNotPaused {
-        // Enhanced security: Verify caller is the designated timelock
-        if (msg.sender != timelock) {
-            revert UnauthorizedMintBurn(msg.sender, timelock);
-        }
-        
+    function burn(uint256 amount) external onlyWhitelisted(custodialSafe) onlyTimelock whenNotPaused {
         _burn(custodialSafe, amount);
     }
 
@@ -198,10 +195,11 @@ contract YRECTokenSimple is
     // ============ ADMIN FUNCTIONS ============
     
     /**
-     * @dev Updates the custodial safe address
+     * @dev Updates the custodial safe address (TIMELOCK REQUIRED)
      * @param newCustodialSafe New custodial safe address
+     * @notice This function requires a 6-hour timelock delay for security
      */
-    function updateCustodialSafe(address newCustodialSafe) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateCustodialSafe(address newCustodialSafe) external onlyTimelock {
         if (newCustodialSafe == address(0)) revert ZeroAddress();
         
         address oldSafe = custodialSafe;
@@ -215,11 +213,13 @@ contract YRECTokenSimple is
     }
 
     /**
-     * @dev Updates the timelock address for enhanced mint/burn security
+     * @dev Updates the timelock address (TIMELOCK REQUIRED)
      * @param newTimelock New timelock contract address
+     * @notice This function requires a 6-hour timelock delay for security
      */
-    function updateTimelock(address newTimelock) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateTimelock(address newTimelock) external onlyTimelock {
         if (newTimelock == address(0)) revert ZeroAddress();
+        if (newTimelock == address(this)) revert TimelockUpdateNotAllowed();
         
         address oldTimelock = timelock;
         timelock = newTimelock;
@@ -240,11 +240,13 @@ contract YRECTokenSimple is
     /**
      * @dev Standard upgrade authorization - immediate upgrades with role control only
      * @notice Contract upgrades are immediate (no timelock delay) for operational flexibility
+     * @notice Upgrades are blocked when contract is paused for security
      */
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) whenNotPaused {
         // Standard OpenZeppelin upgrade pattern - immediate upgrades
         // Only UPGRADER_ROLE required, no timelock delays for upgrades
         // This allows for quick fixes and updates when needed
+        // Upgrades blocked when paused for security
     }
 
     // ============ VIEW FUNCTIONS ============
@@ -291,4 +293,14 @@ contract YRECTokenSimple is
     function decimals() public pure override returns (uint8) {
         return 18;
     }
+
+    // ============ STORAGE GAP ============
+    
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * The size of the __gap array is calculated so that the amount of storage used by a
+     * contract always adds up to the same 50 slots, plus the storage used by the parent contracts.
+     */
+    uint256[50] private __gap;
 } 
