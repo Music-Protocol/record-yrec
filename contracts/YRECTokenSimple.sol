@@ -53,15 +53,6 @@ contract YRECTokenSimple is
     /// @dev Maximum batch size for whitelist operations to prevent gas limit issues
     uint256 public constant MAX_BATCH_SIZE = 500;
 
-    // ============ CONSTRUCTOR ============
-
-    /**
-     * @dev Constructor that disables initializers to prevent implementation contract hijacking
-     */
-    constructor() {
-        _disableInitializers();
-    }
-
     // ============ EVENTS ============
     
     event CustodialSafeUpdated(address indexed oldSafe, address indexed newSafe);
@@ -256,6 +247,36 @@ contract YRECTokenSimple is
      */
     function isWhitelisted(address account) external view returns (bool) {
         return _whitelist[account];
+    }
+
+    /**
+     * @dev Returns the total IP value backing all YREC tokens
+     * @notice For YREC, total IP value equals total supply due to 1:1 USD backing
+     * @return Total IP value in USD (with 18 decimals)
+     */
+    function getTotalIPValue() external view returns (uint256) {
+        // For YREC, total IP value equals total supply due to 1:1 USD backing
+        return totalSupply();
+    }
+
+    /**
+     * @dev Returns the IP value per token
+     * @notice For YREC, each token represents exactly $1 USD of IP value
+     * @return IP value per token in USD (with 18 decimals)
+     */
+    function getIPValuePerToken() external view returns (uint256) {
+        // Each YREC token represents exactly $1 USD of IP value
+        return 1e18; // $1.00 with 18 decimals
+    }
+
+    /**
+     * @dev Returns the IP value for a specific holder
+     * @param holder Address of the token holder
+     * @return IP value for the holder in USD (with 18 decimals)
+     */
+    function getIPValueForHolder(address holder) external view returns (uint256) {
+        // IP value equals token balance due to 1:1 backing
+        return balanceOf(holder);
     }
 
     // ============ OVERRIDES ============

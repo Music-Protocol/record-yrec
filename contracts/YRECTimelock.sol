@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/governance/TimelockController.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 /**
  * @title YRECTimelock
@@ -41,9 +40,7 @@ contract YRECTimelock is TimelockController {
         address[] memory executors,
         address admin
     ) TimelockController(minDelay, proposers, executors, admin) {
-        // Disable initializers to prevent potential implementation attacks
-        // Even though this is not upgradeable, it's a best practice for defense-in-depth
-        Initializable._disableInitializers();
+        // Removed Initializable._disableInitializers(); not needed for non-upgradeable contract
     }
     
     /**
